@@ -7,7 +7,7 @@ namespace SessionConsumer
 {
     class Program
     {
-        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=KZjcFAsjhebvZJC/iBrU/eh+HYGS/+pExpYsRPTp8xw=;EntityPath=partition-session-queue";
+        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=c6/9qt6zjnH5XA/Xo4NQS4pIB0QVjv3WpoJ0vdLZetU=;EntityPath=partition-session-queue";
         static string queueName = "partition-session-queue";
 
         static async Task Main(string[] args)
@@ -36,30 +36,25 @@ namespace SessionConsumer
         {
             await using (var client = new ServiceBusClient(connectionString))
             {
-                var options = new ServiceBusSessionReceiverOptions
-                {
-                    ReceiveMode = ServiceBusReceiveMode.PeekLock,
-                };
-
-                //var receiver = client.CreateReceiver(queueName);
-                var receiver = await client.AcceptNextSessionAsync(queueName);
-                System.Console.WriteLine("Ready to consume");
-
                 while (true)
                 {
-                    var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
-                    if (message != null)
-                    {
-                        await receiver.DisposeAsync();
-                        receiver = await client.AcceptNextSessionAsync(queueName);
-                        System.Console.WriteLine($"{consumerName} consuming: {message.Body.ToString()}, SessionID: {message.SessionId}, PartitionKey: {message.PartitionKey}");
-                    }
+                    var receiver = await client.AcceptNextSessionAsync(queueName);
+                    System.Console.WriteLine("Ready to consume session");
 
-                    // Simulate work...
-                    await Task.Delay(readDelay);
-
-                    if (message != null)
+                    while (true)
                     {
+                        var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
+                        if (message == null)
+                        {
+                            System.Console.WriteLine("Queue is empty for session.");
+                            break;
+                        }
+
+                        System.Console.WriteLine($"Consuming: {message.Body.ToString()}, SessionID: {message.SessionId}, PartitionKey: {message.PartitionKey}");
+
+                        // Simulate work...
+                        await Task.Delay(readDelay);
+
                         await receiver.CompleteMessageAsync(message);
                     }
                 }

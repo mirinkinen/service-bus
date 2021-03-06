@@ -35,17 +35,12 @@ namespace SimpleConsumer
         {
             await using (var client = new ServiceBusClient(connectionString))
             {
-                var options = new ServiceBusReceiverOptions
-                {
-                    ReceiveMode = ServiceBusReceiveMode.PeekLock,
-                };
-
                 var receiver = client.CreateReceiver(_queueName);
                 System.Console.WriteLine("Ready to consume");
 
                 while (true)
                 {
-                    var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
+                    var message = await receiver.ReceiveMessageAsync();
                     if (message != null)
                     {
                         System.Console.WriteLine($"{consumerName} consuming: {message.Body.ToString()}");

@@ -8,7 +8,7 @@ namespace SessionProducer
 {
     class Program
     {
-        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=DOdqcEjqaDdxALh4gKiVHOyJa6gu7xemKhH7eMqB+6o=;EntityPath=partition-session-queue";
+        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=jEXa6J+QEpQASvXXzHGxN7EnFW8aVTvdFyMIsgygx58=;EntityPath=partition-session-queue";
         static string _queueName = "partition-session-queue";
 
         static Random _random = new Random(Guid.NewGuid().GetHashCode());
@@ -37,7 +37,7 @@ namespace SessionProducer
                     var sbMessage = new ServiceBusMessage(message);
                     sbMessage.SessionId = $"Session {GetRandomLetter()}";
 
-                    System.Console.WriteLine($"Sending: {message}, SessionID: {sbMessage.SessionId}, PartitionKey: {sbMessage.PartitionKey}");
+                    System.Console.WriteLine($"Producing: {message}, SessionID: {sbMessage.SessionId}, PartitionKey: {sbMessage.PartitionKey}");
                     await sender.SendMessageAsync(sbMessage);
                 }
             }
