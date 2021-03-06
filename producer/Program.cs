@@ -38,7 +38,7 @@ namespace producer
                 {
                     ServiceBusSender sender = client.CreateSender(queueName);
 
-                    for (int i = 0; i < 100; i++)
+                    for (int i = 0; i < 20; i++)
                     {
                         if (cancellationToken.IsCancellationRequested)
                         {
@@ -48,10 +48,12 @@ namespace producer
                         var message = $"Message {i}";
                         System.Console.WriteLine($"Sending: {message}");
                         await sender.SendMessageAsync(new ServiceBusMessage(message), cancellationToken);
-
-                        await Task.Delay(100);
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                System.Console.WriteLine($"Error: {ex.Message}");
             }
             finally
             {
