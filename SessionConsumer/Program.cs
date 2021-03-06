@@ -7,7 +7,7 @@ namespace SessionConsumer
 {
     class Program
     {
-        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=manage;SharedAccessKey=fnCjblxrz6UNUKo6LOU/X9d0UXBL8UTebrfjmO/Eqb0=;EntityPath=partition-session-queue";
+        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=KZjcFAsjhebvZJC/iBrU/eh+HYGS/+pExpYsRPTp8xw=;EntityPath=partition-session-queue";
         static string queueName = "partition-session-queue";
 
         static async Task Main(string[] args)

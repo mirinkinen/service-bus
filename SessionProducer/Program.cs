@@ -8,7 +8,7 @@ namespace SessionProducer
 {
     class Program
     {
-        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=manage;SharedAccessKey=fnCjblxrz6UNUKo6LOU/X9d0UXBL8UTebrfjmO/Eqb0=;EntityPath=partition-session-queue";
+        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=DOdqcEjqaDdxALh4gKiVHOyJa6gu7xemKhH7eMqB+6o=;EntityPath=partition-session-queue";
         static string _queueName = "partition-session-queue";
 
         static Random _random = new Random(Guid.NewGuid().GetHashCode());
