@@ -35,7 +35,7 @@ namespace SimpleConsumer
         {
             await using (var client = new ServiceBusClient(connectionString))
             {
-                var options = new ServiceBusSessionReceiverOptions
+                var options = new ServiceBusReceiverOptions
                 {
                     ReceiveMode = ServiceBusReceiveMode.PeekLock,
                 };
@@ -48,8 +48,6 @@ namespace SimpleConsumer
                     var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
                     if (message != null)
                     {
-                        await receiver.DisposeAsync();
-                        receiver = await client.AcceptNextSessionAsync(_queueName);
                         System.Console.WriteLine($"{consumerName} consuming: {message.Body.ToString()}");
                     }
 
