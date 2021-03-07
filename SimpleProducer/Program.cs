@@ -1,44 +1,40 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
+﻿using Azure.Messaging.ServiceBus;
+using System;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
 
 namespace SimpleProducer
 {
-    class Program
+    internal class Program
     {
-        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=7+p4vTqrk9cf2BqY4HpaOkqrad5U8IdnC+vWj+pbC3k=;EntityPath=simple-queue";
-        static string _queueName = "simple-queue";
+        private static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=7+p4vTqrk9cf2BqY4HpaOkqrad5U8IdnC+vWj+pbC3k=;EntityPath=simple-queue";
+        private static string _queueName = "simple-queue";
 
-        static Random _random = new Random(Guid.NewGuid().GetHashCode());
-
-        static async Task Main(string[] args)
-        {
+        private static async Task Main(string[] args)
+        {            
             try
             {
-                await ProduceMessages();
+                var messageCount = args.Length == 1 ? Convert.ToInt32(args[0]) : 100;
+
+                await ProduceMessages(messageCount);
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
 
-        private static async Task ProduceMessages()
+        private static async Task ProduceMessages(int messageCount)
         {
-            await using (var client = new ServiceBusClient(_connectionString))
+            await using var client = new ServiceBusClient(_connectionString);
+            await using ServiceBusSender sender = client.CreateSender(_queueName);
+
+            for (int i = 1; i <= messageCount; i++)
             {
-                ServiceBusSender sender = client.CreateSender(_queueName);
+                var messsageBody = $"Message {i}";
+                var message = new ServiceBusMessage(messsageBody);
 
-                for (int i = 0; i < 20; i++)
-                {
-                    var message = $"Message {i}";
-                    var sbMessage = new ServiceBusMessage(message);
-
-                    System.Console.WriteLine($"Sending: {message}");
-                    await sender.SendMessageAsync(sbMessage);
-                }
+                Console.WriteLine($"Sending: {messsageBody}");
+                await sender.SendMessageAsync(message);
             }
         }
     }

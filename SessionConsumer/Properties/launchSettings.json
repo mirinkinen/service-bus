@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SessionConsumer": {
+      "commandName": "Project",
+      "commandLineArgs": "Consumer 0"
+    }
+  }
+}

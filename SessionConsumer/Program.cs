@@ -1,22 +1,28 @@
-﻿using System;
+﻿using Azure.Messaging.ServiceBus;
+using Common;
+using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
 
 namespace SessionConsumer
 {
-    class Program
+    internal class Program
     {
-        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=c6/9qt6zjnH5XA/Xo4NQS4pIB0QVjv3WpoJ0vdLZetU=;EntityPath=partition-session-queue";
-        static string queueName = "partition-session-queue";
+        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=c6/9qt6zjnH5XA/Xo4NQS4pIB0QVjv3WpoJ0vdLZetU=;EntityPath=partition-session-queue";
+        private static readonly string _queueName = "partition-session-queue";
 
-        static async Task Main(string[] args)
+        private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
+
+        private static readonly Dictionary<string, long> _sessionSequenceNumbers = new Dictionary<string, long>();
+
+        private static async Task Main(string[] args)
         {
             try
             {
                 if (args.Length != 2)
                 {
-                    System.Console.WriteLine("Give consumer name and delay between reads in milliseconds: consumer.exe consumerA 500");
+                    Console.WriteLine("Give consumer name and delay between reads in milliseconds: consumer.exe consumerA 500");
                     return;
                 }
 
@@ -24,42 +30,94 @@ namespace SessionConsumer
                 var readDelay = TimeSpan.FromMilliseconds(Convert.ToInt32(args[1].ToString()));
 
                 await ConsumeMessages(consumerName, readDelay);
-
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
 
         private static async Task ConsumeMessages(string consumerName, TimeSpan readDelay)
         {
-            await using (var client = new ServiceBusClient(connectionString))
+            await using var client = new ServiceBusClient(_connectionString);
+            while (true)
             {
+                Console.WriteLine("Trying to lock session");
+                ServiceBusSessionReceiver receiver = null;
+                try
+                {
+                    var cancellatioTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    cancellatioTokenSource.Cancel();
+                    receiver = await client.AcceptNextSessionAsync(_queueName, cancellationToken: cancellatioTokenSource.Token);
+                }
+                catch (ServiceBusException ex)
+                {
+                    Console.WriteLine($"Unable to lock to session: {ex.Message}");
+                    continue;
+                }
+
+                Console.WriteLine($"Receiver locked to session {receiver.SessionId}");
+
                 while (true)
                 {
-                    var receiver = await client.AcceptNextSessionAsync(queueName);
-                    System.Console.WriteLine("Ready to consume session");
-
-                    while (true)
+                    try
                     {
-                        var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(1));
+                        var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
+
+                        // If no messages, keep polling..
                         if (message == null)
                         {
-                            System.Console.WriteLine("Queue is empty for session.");
+                            Console.WriteLine($"Queue empty for session {receiver.SessionId}");
                             break;
                         }
 
-                        System.Console.WriteLine($"Consuming: {message.Body.ToString()}, SessionID: {message.SessionId}, PartitionKey: {message.PartitionKey}");
+                        long sequenceNumberDiff = UpdateSequenceNumber(message);
+
+                        Console.WriteLine($"{consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}, Diff: {sequenceNumberDiff}");
 
                         // Simulate work...
-                        await Task.Delay(readDelay);
+                        if (readDelay != TimeSpan.Zero)
+                        {
+                            await Task.Delay(readDelay);
+                        }
+
+                        // 20 % chance to fail.
+                        if (_random.Next(1, 101) >= 80)
+                        {
+                            throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
+                        }
 
                         await receiver.CompleteMessageAsync(message);
+                    }
+                    catch (Exception ex)
+                    {
+                        ConsoleHelper.WriteError(ex.Message);
                     }
                 }
             }
         }
+
+        private static long UpdateSequenceNumber(ServiceBusReceivedMessage message)
+        {
+            if (!_sessionSequenceNumbers.TryGetValue(message.SessionId, out long sequenceNumber))
+            {
+                _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
+                return 0;
+            }
+            else
+            {
+                if (sequenceNumber > message.SequenceNumber)
+                {
+                    ConsoleHelper.WriteWarning("OUT OF ORDER!");
+                }
+                else
+                {
+                    _sessionSequenceNumbers.Remove(message.SessionId);
+                    _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
+                }
+
+                return message.SequenceNumber - sequenceNumber;
+            }
+        }
     }
 }
-

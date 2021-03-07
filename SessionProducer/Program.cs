@@ -1,51 +1,58 @@
-﻿using System;
+﻿using Azure.Messaging.ServiceBus;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
 
 namespace SessionProducer
 {
-    class Program
+    internal class Program
     {
-        static string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=jEXa6J+QEpQASvXXzHGxN7EnFW8aVTvdFyMIsgygx58=;EntityPath=partition-session-queue";
-        static string _queueName = "partition-session-queue";
+        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=jEXa6J+QEpQASvXXzHGxN7EnFW8aVTvdFyMIsgygx58=;EntityPath=partition-session-queue";
+        private static readonly string _queueName = "partition-session-queue";
 
-        static Random _random = new Random(Guid.NewGuid().GetHashCode());
+        private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
+        private static int _messageNumber = 0;
 
-        static async Task Main(string[] args)
+        private static async Task Main(string[] args)
         {
             try
             {
-                await ProduceMessages();
+                var messageCount = args.Length == 1 ? Convert.ToInt32(args[0]) : 100;
+
+                await ProduceMessages(messageCount);
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
 
-        private static async Task ProduceMessages()
+        private static async Task ProduceMessages(int messageCount)
         {
-            await using (var client = new ServiceBusClient(_connectionString))
+            await using var client = new ServiceBusClient(_connectionString);
+            await using ServiceBusSender sender = client.CreateSender(_queueName);
+
+            for (int i = 0; i < messageCount; i++)
             {
-                ServiceBusSender sender = client.CreateSender(_queueName);
+                var messageNumber = Interlocked.Increment(ref _messageNumber);
 
-                for (int i = 0; i < 20; i++)
+                var messageBody = $"Message {messageNumber}";
+                var message = new ServiceBusMessage(messageBody)
                 {
-                    var message = $"Message {i}";
-                    var sbMessage = new ServiceBusMessage(message);
-                    sbMessage.SessionId = $"Session {GetRandomLetter()}";
+                    SessionId = GetRandomSessionId()
+                };
 
-                    System.Console.WriteLine($"Producing: {message}, SessionID: {sbMessage.SessionId}, PartitionKey: {sbMessage.PartitionKey}");
-                    await sender.SendMessageAsync(sbMessage);
-                }
+                Console.WriteLine($"Producing: {messageBody}, SessionID: {message.SessionId}, PartitionKey: {message.PartitionKey}");
+                await sender.SendMessageAsync(message);
             }
         }
 
-        private static char GetRandomLetter()
+        private static string GetRandomSessionId()
         {
-            return "ABCDE".ElementAt(_random.Next(0, 4));
+            var sessionIds = "ABC";
+            return sessionIds.ElementAt(_random.Next(0, sessionIds.Length - 1)).ToString();
+
         }
     }
 }

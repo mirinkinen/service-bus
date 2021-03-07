@@ -1,22 +1,24 @@
-﻿using System;
-using System.Threading;
+﻿using Azure.Messaging.ServiceBus;
+using Common;
+using System;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
 
 namespace SimpleConsumer
 {
-    class Program
+    internal class Program
     {
-        static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=0yh7ESr7/jbppmc/pXV9coVWl8jPFQxhyQ831A9A4dc=;EntityPath=simple-queue";
-        static string _queueName = "simple-queue";
+        private static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=0yh7ESr7/jbppmc/pXV9coVWl8jPFQxhyQ831A9A4dc=;EntityPath=simple-queue";
+        private static string _queueName = "simple-queue";
 
-        static async Task Main(string[] args)
+        private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
+
+        private static async Task Main(string[] args)
         {
             try
             {
                 if (args.Length != 2)
                 {
-                    System.Console.WriteLine("Give consumer name and delay between reads in milliseconds: consumer.exe consumerA 500");
+                    Console.WriteLine("Give consumer name and delay between reads in milliseconds: consumer.exe consumerA 500");
                     return;
                 }
 
@@ -27,32 +29,59 @@ namespace SimpleConsumer
             }
             catch (Exception ex)
             {
-                System.Console.WriteLine($"Error: {ex.Message}");
+                Console.WriteLine($"Error: {ex.Message}");
             }
         }
 
         private static async Task ConsumeMessages(string consumerName, TimeSpan readDelay)
         {
-            await using (var client = new ServiceBusClient(connectionString))
-            {
-                var receiver = client.CreateReceiver(_queueName);
-                System.Console.WriteLine("Ready to consume");
+            await using var client = new ServiceBusClient(connectionString);
+            await using var receiver = client.CreateReceiver(_queueName);
 
-                while (true)
+            Console.WriteLine("Ready to consume");
+
+            long sequenceNumber = 0;
+
+            while (true)
+            {
+                try
                 {
-                    var message = await receiver.ReceiveMessageAsync();
-                    if (message != null)
+                    var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
+
+                    // If no messages, keep polling..
+                    if (message == null) continue;
+
+                    var sequenceNumberDiff = message.SequenceNumber - sequenceNumber;
+
+                    if (sequenceNumber < message.SequenceNumber)
                     {
-                        System.Console.WriteLine($"{consumerName} consuming: {message.Body.ToString()}");
+                        sequenceNumber = message.SequenceNumber;
+                    }
+
+                    Console.WriteLine($"{consumerName} consuming: {message.Body}, SeqNumber: {message.SequenceNumber}, Diff: {sequenceNumberDiff}");
+
+                    if (sequenceNumberDiff < 0)
+                    {
+                        ConsoleHelper.WriteWarning("OUT OF ORDER!");
                     }
 
                     // Simulate work...
-                    await Task.Delay(readDelay);
-
-                    if (message != null)
+                    if (readDelay != TimeSpan.Zero)
                     {
-                        await receiver.CompleteMessageAsync(message);
+                        await Task.Delay(readDelay);
                     }
+
+                    // 20 % chance to fail.
+                    if (_random.Next(1, 101) >= 80)
+                    {
+                        throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
+                    }
+
+                    await receiver.CompleteMessageAsync(message);
+                }
+                catch (Exception ex)
+                {
+                    ConsoleHelper.WriteError(ex.Message);
                 }
             }
         }
