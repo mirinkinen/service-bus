@@ -50,8 +50,8 @@ namespace SessionProducer
 
         private static string GetRandomSessionId()
         {
-            var sessionIds = "ABC";
-            return sessionIds.ElementAt(_random.Next(0, sessionIds.Length - 1)).ToString();
+            var sessionIds = "AB";
+            return sessionIds.ElementAt(_random.Next(0, sessionIds.Length)).ToString();
 
         }
     }

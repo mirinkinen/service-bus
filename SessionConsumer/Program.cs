@@ -42,7 +42,6 @@ namespace SessionConsumer
             await using var client = new ServiceBusClient(_connectionString);
             while (true)
             {
-                Console.WriteLine("Trying to lock session");
                 ServiceBusSessionReceiver receiver = null;
                 try
                 {
@@ -73,7 +72,7 @@ namespace SessionConsumer
                         }
 
                         // 20 % chance to fail.
-                        if (_random.Next(1, 101) >= 80)
+                        if (_random.Next(1, 101) >= 95)
                         {
                             throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
                         }
