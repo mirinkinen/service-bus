@@ -10,25 +10,16 @@ namespace SimpleProducer
         private static string _queueName = "simple-queue";
 
         private static async Task Main(string[] args)
-        {            
-            try
-            {
-                var messageCount = args.Length == 1 ? Convert.ToInt32(args[0]) : 100;
-
-                await ProduceMessages(messageCount);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
+        {
+            await ProduceMessages();
         }
 
-        private static async Task ProduceMessages(int messageCount)
+        private static async Task ProduceMessages()
         {
             await using var client = new ServiceBusClient(_connectionString);
             await using ServiceBusSender sender = client.CreateSender(_queueName);
 
-            for (int i = 1; i <= messageCount; i++)
+            for (int i = 1; i <= 50; i++)
             {
                 var messsageBody = $"Message {i}";
                 var message = new ServiceBusMessage(messsageBody);

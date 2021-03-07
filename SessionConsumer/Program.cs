@@ -1,8 +1,6 @@
 ﻿using Azure.Messaging.ServiceBus;
 using Common;
 using System;
-using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace SessionConsumer
@@ -14,30 +12,16 @@ namespace SessionConsumer
 
         private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
 
-        private static readonly Dictionary<string, long> _sessionSequenceNumbers = new Dictionary<string, long>();
+        private static readonly MessageHandlingOrderValidator _messageHandlingStatistics = new();
 
-        private static async Task Main(string[] args)
+        private static void Main(string[] args)
         {
-            try
-            {
-                if (args.Length != 2)
-                {
-                    Console.WriteLine("Give consumer name and delay between reads in milliseconds: consumer.exe consumerA 500");
-                    return;
-                }
-
-                var consumerName = args[0].ToString();
-                var readDelay = TimeSpan.FromMilliseconds(Convert.ToInt32(args[1].ToString()));
-
-                await ConsumeMessages(consumerName, readDelay);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
+            var consumerA = ConsumeMessages("ConsumerA");
+            var consumerB = ConsumeMessages("ConsumerB");
+            Task.WaitAll(consumerA, consumerB);
         }
 
-        private static async Task ConsumeMessages(string consumerName, TimeSpan readDelay)
+        private static async Task ConsumeMessages(string consumerName)
         {
             await using var client = new ServiceBusClient(_connectionString);
             while (true)
@@ -47,36 +31,21 @@ namespace SessionConsumer
                 {
                     receiver = await client.AcceptNextSessionAsync(_queueName);
 
-                    Console.WriteLine($"Receiver locked to session {receiver.SessionId}");
+                    Console.WriteLine($"{consumerName} locked to session {receiver.SessionId}");
 
-                    while (true)
+                    ServiceBusReceivedMessage message = null;
+                    while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)
                     {
-                        var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
+                        Console.WriteLine($"{consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}");
 
-                        // If no messages, keep polling..
-                        if (message == null)
-                        {
-                            Console.WriteLine($"Queue empty for session {receiver.SessionId}");
-                            break;
-                        }
+                        //ThrowTransientError(message);
 
-                        long sequenceNumberDiff = UpdateSequenceNumber(message);
-
-                        Console.WriteLine($"{consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}, Diff: {sequenceNumberDiff}");
-
-                        // Simulate work...
-                        if (readDelay != TimeSpan.Zero)
-                        {
-                            await Task.Delay(readDelay);
-                        }
-
-                        if (_random.Next(1, 101) >= 95)
-                        {
-                            throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
-                        }
+                        _messageHandlingStatistics.ValidateOrder(message.SessionId, message.SequenceNumber);
 
                         await receiver.CompleteMessageAsync(message);
                     }
+
+                    Console.WriteLine($"{consumerName}: Session {receiver.SessionId} is empty");
                 }
                 catch (Exception ex)
                 {
@@ -86,26 +55,11 @@ namespace SessionConsumer
             }
         }
 
-        private static long UpdateSequenceNumber(ServiceBusReceivedMessage message)
+        private static void ThrowTransientError(ServiceBusReceivedMessage message)
         {
-            if (!_sessionSequenceNumbers.TryGetValue(message.SessionId, out long sequenceNumber))
+            if (_random.Next(1, 101) >= 80)
             {
-                _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
-                return 0;
-            }
-            else
-            {
-                if (sequenceNumber > message.SequenceNumber)
-                {
-                    ConsoleHelper.WriteWarning("OUT OF ORDER!");
-                }
-                else
-                {
-                    _sessionSequenceNumbers.Remove(message.SessionId);
-                    _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
-                }
-
-                return message.SequenceNumber - sequenceNumber;
+                throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
             }
         }
     }
