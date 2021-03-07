@@ -5,16 +5,16 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SessionConsumer
+namespace PartitionConsumer
 {
     internal class Program
     {
-        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=c6/9qt6zjnH5XA/Xo4NQS4pIB0QVjv3WpoJ0vdLZetU=;EntityPath=partition-session-queue";
-        private static readonly string _queueName = "partition-session-queue";
+        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=RgnQcqIEjXDvI48VrD8ErJzkn+tCyxFAIQQHlDrjVto=;EntityPath=partition-queue";
+        private static readonly string _queueName = "partition-queue";
 
         private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
 
-        private static readonly Dictionary<string, long> _sessionSequenceNumbers = new Dictionary<string, long>();
+        private static readonly Dictionary<string, long> _partitionSequenceNumbers = new Dictionary<string, long>();
 
         private static async Task Main(string[] args)
         {
@@ -42,12 +42,10 @@ namespace SessionConsumer
             await using var client = new ServiceBusClient(_connectionString);
             while (true)
             {
-                ServiceBusSessionReceiver receiver = null;
+                ServiceBusReceiver receiver = null;
                 try
                 {
-                    receiver = await client.AcceptNextSessionAsync(_queueName);
-
-                    Console.WriteLine($"Receiver locked to session {receiver.SessionId}");
+                    receiver = client.CreateReceiver(_queueName);
 
                     while (true)
                     {
@@ -56,13 +54,13 @@ namespace SessionConsumer
                         // If no messages, keep polling..
                         if (message == null)
                         {
-                            Console.WriteLine($"Queue empty for session {receiver.SessionId}");
+                            Console.WriteLine($"Queue empty");
                             break;
                         }
 
                         long sequenceNumberDiff = UpdateSequenceNumber(message);
 
-                        Console.WriteLine($"{consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}, Diff: {sequenceNumberDiff}");
+                        Console.WriteLine($"{consumerName}: {message.Body}, PartitionKey: {message.PartitionKey}, SeqNum: {message.SequenceNumber}, Diff: {sequenceNumberDiff}");
 
                         // Simulate work...
                         if (readDelay != TimeSpan.Zero)
@@ -89,9 +87,9 @@ namespace SessionConsumer
 
         private static long UpdateSequenceNumber(ServiceBusReceivedMessage message)
         {
-            if (!_sessionSequenceNumbers.TryGetValue(message.SessionId, out long sequenceNumber))
+            if (!_partitionSequenceNumbers.TryGetValue(message.PartitionKey, out long sequenceNumber))
             {
-                _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
+                _partitionSequenceNumbers.Add(message.PartitionKey, message.SequenceNumber);
                 return 0;
             }
             else
@@ -102,8 +100,8 @@ namespace SessionConsumer
                 }
                 else
                 {
-                    _sessionSequenceNumbers.Remove(message.SessionId);
-                    _sessionSequenceNumbers.Add(message.SessionId, message.SequenceNumber);
+                    _partitionSequenceNumbers.Remove(message.PartitionKey);
+                    _partitionSequenceNumbers.Add(message.PartitionKey, message.SequenceNumber);
                 }
 
                 return message.SequenceNumber - sequenceNumber;

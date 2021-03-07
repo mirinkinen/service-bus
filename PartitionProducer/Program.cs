@@ -4,12 +4,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SessionProducer
+namespace PartitionProducer
 {
     internal class Program
     {
-        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=jEXa6J+QEpQASvXXzHGxN7EnFW8aVTvdFyMIsgygx58=;EntityPath=partition-session-queue";
-        private static readonly string _queueName = "partition-session-queue";
+        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=pFwub4jvfyvOxSSSr50BWsfD/dypad0b5bWbr5db5/Q=;EntityPath=partition-queue";
+        private static readonly string _queueName = "partition-queue";
 
         private static readonly Random _random = new(Guid.NewGuid().GetHashCode());
         private static int _messageNumber = 0;
@@ -40,15 +40,15 @@ namespace SessionProducer
                 var messageBody = $"Message {messageNumber}";
                 var message = new ServiceBusMessage(messageBody)
                 {
-                    SessionId = GetRandomSessionId()
+                    PartitionKey = GetRandomPartitionKey()
                 };
 
-                Console.WriteLine($"Producing: {messageBody}, SessionID: {message.SessionId}");
+                Console.WriteLine($"Producing: {messageBody}, PartitionKey: {message.PartitionKey}");
                 await sender.SendMessageAsync(message);
             }
         }
 
-        private static string GetRandomSessionId()
+        private static string GetRandomPartitionKey()
         {
             var sessionIds = "AB";
             return sessionIds.ElementAt(_random.Next(0, sessionIds.Length)).ToString();
