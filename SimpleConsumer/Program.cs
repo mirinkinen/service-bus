@@ -12,19 +12,13 @@ namespace SimpleConsumer
 
         private static readonly MessageHandlingOrderValidator _orderValidator = new();
 
-        private static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
-            try
-            {
-                var consumerA = ConsumeMessages("ConsumerA");
-                var consumerB = ConsumeMessages("ConsumerB");
+            await ConsumeMessages("ConsumerA");
 
-                Task.WaitAll(consumerA, consumerB);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
+            //var consumerA = ConsumeMessages("ConsumerA");
+            //var consumerB = ConsumeMessages("ConsumerB");
+            //Task.WaitAll(consumerA, consumerB);
         }
 
         private static async Task ConsumeMessages(string consumerName)
@@ -36,7 +30,7 @@ namespace SimpleConsumer
             while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)
             {
                 Console.WriteLine($"{consumerName} consuming: {message.Body}, SeqNumber: {message.SequenceNumber}");
-                
+
                 _orderValidator.ValidateOrder(message.SequenceNumber);
 
                 await receiver.CompleteMessageAsync(message);
