@@ -46,21 +46,12 @@ namespace SessionConsumer
                 ServiceBusSessionReceiver receiver = null;
                 try
                 {
-                    var cancellatioTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    cancellatioTokenSource.Cancel();
+                    var cancellatioTokenSource = new CancellationTokenSource();
                     receiver = await client.AcceptNextSessionAsync(_queueName, cancellationToken: cancellatioTokenSource.Token);
-                }
-                catch (ServiceBusException ex)
-                {
-                    Console.WriteLine($"Unable to lock to session: {ex.Message}");
-                    continue;
-                }
 
-                Console.WriteLine($"Receiver locked to session {receiver.SessionId}");
+                    Console.WriteLine($"Receiver locked to session {receiver.SessionId}");
 
-                while (true)
-                {
-                    try
+                    while (true)
                     {
                         var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
 
@@ -89,10 +80,11 @@ namespace SessionConsumer
 
                         await receiver.CompleteMessageAsync(message);
                     }
-                    catch (Exception ex)
-                    {
-                        ConsoleHelper.WriteError(ex.Message);
-                    }
+                }
+                catch (Exception ex)
+                {
+                    ConsoleHelper.WriteError(ex.Message);
+                    await receiver.CloseAsync();
                 }
             }
         }
