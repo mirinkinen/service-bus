@@ -2,7 +2,6 @@
 using Common;
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace PartitionConsumer
@@ -42,12 +41,11 @@ namespace PartitionConsumer
             await using var client = new ServiceBusClient(_connectionString);
             while (true)
             {
-                ServiceBusReceiver receiver = null;
-                try
-                {
-                    receiver = client.CreateReceiver(_queueName);
+                ServiceBusReceiver receiver = client.CreateReceiver(_queueName);
 
-                    while (true)
+                while (true)
+                {
+                    try
                     {
                         var message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2));
 
@@ -68,7 +66,6 @@ namespace PartitionConsumer
                             await Task.Delay(readDelay);
                         }
 
-                        // 20 % chance to fail.
                         if (_random.Next(1, 101) >= 95)
                         {
                             throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
@@ -76,11 +73,10 @@ namespace PartitionConsumer
 
                         await receiver.CompleteMessageAsync(message);
                     }
-                }
-                catch (Exception ex)
-                {
-                    ConsoleHelper.WriteError(ex.Message);
-                    await receiver.CloseAsync();
+                    catch (Exception ex)
+                    {
+                        ConsoleHelper.WriteError(ex.Message);
+                    }
                 }
             }
         }

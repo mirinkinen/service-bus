@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 
 namespace PartitionProducer
 {
@@ -33,26 +34,38 @@ namespace PartitionProducer
             await using var client = new ServiceBusClient(_connectionString);
             await using ServiceBusSender sender = client.CreateSender(_queueName);
 
+            await CreateMessagesForPartition(sender, messageCount, "A");
+            await CreateMessagesForPartition(sender, messageCount, "B");
+        }
+
+        private static async Task CreateMessagesForPartition(ServiceBusSender sender, int messageCount, string partitionKey)
+        {
+            CommittableTransaction committableTransaction = new();
+
             for (int i = 0; i < messageCount; i++)
             {
+                using TransactionScope ts = new(committableTransaction, TransactionScopeAsyncFlowOption.Enabled);
                 var messageNumber = Interlocked.Increment(ref _messageNumber);
 
                 var messageBody = $"Message {messageNumber}";
                 var message = new ServiceBusMessage(messageBody)
                 {
-                    PartitionKey = GetRandomPartitionKey()
+                    PartitionKey = partitionKey
                 };
 
                 Console.WriteLine($"Producing: {messageBody}, PartitionKey: {message.PartitionKey}");
                 await sender.SendMessageAsync(message);
+
+                ts.Complete();
             }
+
+            committableTransaction.Commit();
         }
 
         private static string GetRandomPartitionKey()
         {
             var sessionIds = "AB";
             return sessionIds.ElementAt(_random.Next(0, sessionIds.Length)).ToString();
-
         }
     }
 }

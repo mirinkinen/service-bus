@@ -70,7 +70,6 @@ namespace SessionConsumer
                             await Task.Delay(readDelay);
                         }
 
-                        // 20 % chance to fail.
                         if (_random.Next(1, 101) >= 95)
                         {
                             throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
