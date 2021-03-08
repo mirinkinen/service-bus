@@ -1,6 +1,7 @@
 ﻿using Azure.Messaging.ServiceBus;
 using Common;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace SessionConsumer
@@ -26,41 +27,78 @@ namespace SessionConsumer
             await using var client = new ServiceBusClient(_connectionString);
             while (true)
             {
-                ServiceBusSessionReceiver receiver = null;
-                try
+                ServiceBusSessionReceiver receiver = await client.AcceptNextSessionAsync(_queueName);
+
+                ConsoleHelper.WriteInfo($"{consumerName} locked to session {receiver.SessionId}");
+
+                ServiceBusReceivedMessage message;
+                while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)
                 {
-                    receiver = await client.AcceptNextSessionAsync(_queueName);
-
-                    Console.WriteLine($"{consumerName} locked to session {receiver.SessionId}");
-
-                    ServiceBusReceivedMessage message = null;
-                    while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)
+                    try
                     {
+                        var sessionState = await GetSessionState(receiver);
+
                         Console.WriteLine($"{consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}");
 
-                        //ThrowTransientError(message);
+                        if (sessionState.IsStateComplete("A"))
+                        {
+                            ConsoleHelper.WriteInfo("State A already complete!");
+                        }
+                        else
+                        {
+                            // Execute work A. This must be done only once per message!
+                            DoWork();
 
+                            // Mark that phase A was completed.
+                            sessionState.MarkStateComplete("A");
+                            await receiver.SetSessionStateAsync(new BinaryData(sessionState));
+                        }
+
+                        // Execute work B.
+                        DoWork();
+
+                        // Message handled!
                         _messageHandlingStatistics.ValidateOrder(message.SessionId, message.SequenceNumber);
-
                         await receiver.CompleteMessageAsync(message);
                     }
+                    catch (Exception ex)
+                    {
+                        ConsoleHelper.WriteError(ex.Message);
+                        await receiver.AbandonMessageAsync(message);
+                    }
+                }
 
-                    Console.WriteLine($"{consumerName}: Session {receiver.SessionId} is empty");
-                }
-                catch (Exception ex)
-                {
-                    ConsoleHelper.WriteError(ex.Message);
-                    await receiver.CloseAsync();
-                }
+                ConsoleHelper.WriteInfo($"{consumerName}: Session {receiver.SessionId} is empty");
             }
         }
 
-        private static void ThrowTransientError(ServiceBusReceivedMessage message)
+        private static async Task<SessionState> GetSessionState(ServiceBusSessionReceiver receiver)
+        {
+            var binaryState = await receiver.GetSessionStateAsync();
+            return binaryState != null ? binaryState.ToObjectFromJson<SessionState>() : new SessionState();
+        }
+
+        private static void DoWork()
         {
             if (_random.Next(1, 101) >= 80)
             {
-                throw new InvalidOperationException($"Failed to process item {message.SequenceNumber}");
+                throw new InvalidOperationException($"Some error occurred while working.");
             }
+        }
+    }
+
+    public class SessionState
+    {
+        public List<string> StatesCompleted { get; set; } = new List<string>();
+
+        public void MarkStateComplete(string state)
+        {
+            StatesCompleted.Add(state);
+        }
+
+        public bool IsStateComplete(string state)
+        {
+            return StatesCompleted.Contains(state);
         }
     }
 }
