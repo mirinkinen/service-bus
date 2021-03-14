@@ -1,4 +1,5 @@
-﻿using Azure.Messaging.ServiceBus;
+﻿using Azure.Identity;
+using Azure.Messaging.ServiceBus;
 using Common;
 using System;
 using System.Threading.Tasks;
@@ -7,9 +8,6 @@ namespace SimpleConsumer
 {
     internal class Program
     {
-        private static string connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=0yh7ESr7/jbppmc/pXV9coVWl8jPFQxhyQ831A9A4dc=;EntityPath=simple-queue";
-        private static string _queueName = "simple-queue";
-
         private static readonly MessageHandlingOrderValidator _orderValidator = new();
 
         private static async Task Main(string[] args)
@@ -23,8 +21,10 @@ namespace SimpleConsumer
 
         private static async Task ConsumeMessages(string consumerName)
         {
-            await using var client = new ServiceBusClient(connectionString);
-            await using var receiver = client.CreateReceiver(_queueName);
+            var credentials = new DefaultAzureCredential();
+
+            await using var client = new ServiceBusClient(EnvironmentVariable.ServiceBusFqns, credentials);
+            await using var receiver = client.CreateReceiver(EnvironmentVariable.SimpleQueue);
 
             ServiceBusReceivedMessage message = null;
             while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)

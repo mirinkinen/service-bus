@@ -1,4 +1,5 @@
-﻿using Azure.Messaging.ServiceBus;
+﻿using Azure.Identity;
+using Azure.Messaging.ServiceBus;
 using Common;
 using System;
 using System.Threading.Tasks;
@@ -7,9 +8,6 @@ namespace PartitionConsumer
 {
     internal class Program
     {
-        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=listen;SharedAccessKey=RgnQcqIEjXDvI48VrD8ErJzkn+tCyxFAIQQHlDrjVto=;EntityPath=partition-queue";
-        private static readonly string _queueName = "partition-queue";
-
         private static readonly MessageHandlingOrderValidator _messageHandlingStatistics = new();
 
         private static async Task Main(string[] args)
@@ -23,8 +21,10 @@ namespace PartitionConsumer
 
         private static async Task ConsumeMessages(string consumerName)
         {
-            await using var client = new ServiceBusClient(_connectionString);
-            ServiceBusReceiver receiver = client.CreateReceiver(_queueName);
+            var credentials = new DefaultAzureCredential();
+
+            await using var client = new ServiceBusClient(EnvironmentVariable.ServiceBusFqns, credentials);
+            ServiceBusReceiver receiver = client.CreateReceiver(EnvironmentVariable.PartitionedQueue);
 
             ServiceBusReceivedMessage message = null;
             while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)

@@ -1,4 +1,6 @@
-﻿using Azure.Messaging.ServiceBus;
+﻿using Azure.Identity;
+using Azure.Messaging.ServiceBus;
+using Common;
 using System;
 using System.Threading.Tasks;
 
@@ -6,26 +8,26 @@ namespace SessionProducer
 {
     internal class Program
     {
-        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=jEXa6J+QEpQASvXXzHGxN7EnFW8aVTvdFyMIsgygx58=;EntityPath=partition-session-queue";
-        private static readonly string _queueName = "partition-session-queue";
-
         private static async Task Main(string[] args)
         {
-            await ProduceMessages("A");
-            await ProduceMessages("B");
-            await ProduceMessages("C");
+            var credentials = new DefaultAzureCredential();
+
+            await using var client = new ServiceBusClient(EnvironmentVariable.ServiceBusFqns, credentials);
+
+            await ProduceMessages(client, "A");
+            await ProduceMessages(client, "B");
+            await ProduceMessages(client, "C");
         }
 
-        private static async Task ProduceMessages(string partitionKey)
+        private static async Task ProduceMessages(ServiceBusClient client, string sessionId)
         {
-            await using var client = new ServiceBusClient(_connectionString);
-            await using ServiceBusSender sender = client.CreateSender(_queueName);
+            await using ServiceBusSender sender = client.CreateSender(EnvironmentVariable.SessionQueue);
 
-            for (int i = 1; i <= 5; i++)
+            for (int i = 1; i <= 10; i++)
             {
                 var messsageBody = $"Message {i}";
                 var message = new ServiceBusMessage(messsageBody);
-                message.SessionId = partitionKey;
+                message.SessionId = sessionId;
 
                 Console.WriteLine($"Sending: {messsageBody} SessionId: {message.SessionId}");
                 await sender.SendMessageAsync(message);

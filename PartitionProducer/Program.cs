@@ -1,4 +1,6 @@
-﻿using Azure.Messaging.ServiceBus;
+﻿using Azure.Identity;
+using Azure.Messaging.ServiceBus;
+using Common;
 using System;
 using System.Threading.Tasks;
 
@@ -6,9 +8,6 @@ namespace PartitionProducer
 {
     internal class Program
     {
-        private static readonly string _connectionString = "Endpoint=sb://sb-111.servicebus.windows.net/;SharedAccessKeyName=send;SharedAccessKey=pFwub4jvfyvOxSSSr50BWsfD/dypad0b5bWbr5db5/Q=;EntityPath=partition-queue";
-        private static readonly string _queueName = "partition-queue";
-
         private static async Task Main(string[] args)
         {
             await ProduceMessages("A");
@@ -18,8 +17,10 @@ namespace PartitionProducer
 
         private static async Task ProduceMessages(string partitionKey)
         {
-            await using var client = new ServiceBusClient(_connectionString);
-            await using ServiceBusSender sender = client.CreateSender(_queueName);
+            var credentials = new DefaultAzureCredential();
+
+            await using var client = new ServiceBusClient(EnvironmentVariable.ServiceBusFqns, credentials);
+            await using ServiceBusSender sender = client.CreateSender(EnvironmentVariable.PartitionedQueue);
 
             for (int i = 1; i <= 10; i++)
             {
