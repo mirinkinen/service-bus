@@ -31,7 +31,12 @@ namespace AsyncSessionConsumer
 
         private async Task Start()
         {
-            var sessionProcessor = _client.CreateSessionProcessor(EnvironmentVariable.SessionQueue);
+            var options = new ServiceBusSessionProcessorOptions()
+            {
+                MaxConcurrentSessions = 2
+            };
+
+            var sessionProcessor = _client.CreateSessionProcessor(EnvironmentVariable.SessionQueue, options);
             sessionProcessor.ProcessMessageAsync += SessionProcessor_ProcessMessageAsync;
             sessionProcessor.SessionInitializingAsync += SessionProcessor_SessionInitializingAsync;
             sessionProcessor.SessionClosingAsync += SessionProcessor_SessionClosingAsync;
@@ -40,12 +45,23 @@ namespace AsyncSessionConsumer
             _cancellationTokenSource = new CancellationTokenSource();
             await sessionProcessor.StartProcessingAsync();
 
-            await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationTokenSource.Token);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationTokenSource.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                ConsoleHelper.WriteInfo($"{_consumerName} canceled.");
+            }
+            finally
+            {
+                await sessionProcessor.StopProcessingAsync();
+            }
         }
 
         private static Task SessionProcessor_ProcessErrorAsync(ProcessErrorEventArgs arg)
         {
-            ConsoleHelper.WriteError($"SessionError: {arg.Exception.Message}");
+            ConsoleHelper.WriteError($"Error: {arg.Exception.Message}. InnerException: {arg.Exception.InnerException?.Message}");
             return Task.CompletedTask;
         }
 
@@ -57,6 +73,8 @@ namespace AsyncSessionConsumer
 
         private Task SessionProcessor_SessionInitializingAsync(ProcessSessionEventArgs arg)
         {
+            _cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+
             ConsoleHelper.WriteInfo($"{_consumerName}: Locked to session {arg.SessionId}");
             return Task.CompletedTask;
         }
@@ -65,10 +83,13 @@ namespace AsyncSessionConsumer
         {
             try
             {
+                // Add 5 seconds more time to live.
+                _cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+
                 var message = arg.Message;
                 var sessionState = await GetSessionState(arg);
 
-                Console.WriteLine($"ConsumerX: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}");
+                Console.WriteLine($"{_consumerName}: {message.Body}, SessionID: {message.SessionId}, SeqNum: {message.SequenceNumber}");
 
                 if (sessionState.IsStateComplete("A"))
                 {
@@ -80,7 +101,6 @@ namespace AsyncSessionConsumer
                     DoWork();
 
                     // Mark that phase A was completed.
-                    await arg.SetSessionStateAsync(null);
                     sessionState.MarkStateComplete("A");
                     await arg.SetSessionStateAsync(new BinaryData(sessionState));
                 }
@@ -89,6 +109,7 @@ namespace AsyncSessionConsumer
                 DoWork();
 
                 // Message handled!
+                await arg.SetSessionStateAsync(null);
                 _messageHandlingStatistics.ValidateOrder(message.SessionId, message.SequenceNumber);
                 await arg.CompleteMessageAsync(message);
             }
