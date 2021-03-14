@@ -15,7 +15,6 @@ namespace AsyncSessionConsumer
         private readonly string _consumerName;
 
         private readonly MessageHandlingOrderValidator _messageHandlingStatistics = new();
-        private CancellationTokenSource _cancellationTokenSource;
 
         public Consumer(ServiceBusClient client, string consumerName)
         {
@@ -46,8 +45,7 @@ namespace AsyncSessionConsumer
 
             try
             {
-                _cancellationTokenSource = new CancellationTokenSource();
-                await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationTokenSource.Token);
+                await Task.Delay(Timeout.InfiniteTimeSpan);
             }
             catch (TaskCanceledException)
             {
@@ -73,8 +71,6 @@ namespace AsyncSessionConsumer
 
         private Task SessionProcessor_SessionInitializingAsync(ProcessSessionEventArgs arg)
         {
-            _cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-
             ConsoleHelper.WriteInfo($"{_consumerName}: Locked to session {arg.SessionId}");
             return Task.CompletedTask;
         }
@@ -83,9 +79,6 @@ namespace AsyncSessionConsumer
         {
             try
             {
-                // Add 5 seconds more time to live.
-                _cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-
                 var message = arg.Message;
                 var sessionState = await GetSessionState(arg);
 
@@ -98,7 +91,7 @@ namespace AsyncSessionConsumer
                 else
                 {
                     // Execute work A. This must be done only once per message!
-                    DoWork();
+                    DoWork(arg.Message);
 
                     // Mark that phase A was completed.
                     sessionState.MarkStateComplete("A");
@@ -106,7 +99,7 @@ namespace AsyncSessionConsumer
                 }
 
                 // Execute work B.
-                DoWork();
+                DoWork(arg.Message);
 
                 // Message handled!
                 await arg.SetSessionStateAsync(null);
@@ -126,11 +119,11 @@ namespace AsyncSessionConsumer
             return binaryState != null ? binaryState.ToObjectFromJson<SessionState>() : new SessionState();
         }
 
-        private static void DoWork()
+        private static void DoWork(ServiceBusReceivedMessage message)
         {
             if (_random.Next(1, 101) >= 90)
             {
-                throw new InvalidOperationException($"Some error occurred while working.");
+                throw new InvalidOperationException($"Some error occurred while working: {message.SequenceNumber}");
             }
         }
     }

@@ -14,9 +14,17 @@ namespace SessionProducer
 
             await using var client = new ServiceBusClient(EnvironmentVariable.ServiceBusFqns, credentials);
 
-            await ProduceMessages(client, "A");
-            await ProduceMessages(client, "B");
-            await ProduceMessages(client, "C");
+            Task.WaitAll(
+                ProduceMessages(client, "A"),
+                ProduceMessages(client, "B"),
+                ProduceMessages(client, "C")
+                //ProduceMessages(client, "D"),
+                //ProduceMessages(client, "E"),
+                //ProduceMessages(client, "F"),
+                //ProduceMessages(client, "G"),
+                //ProduceMessages(client, "H"),
+                //ProduceMessages(client, "I")
+            );
         }
 
         private static async Task ProduceMessages(ServiceBusClient client, string sessionId)
