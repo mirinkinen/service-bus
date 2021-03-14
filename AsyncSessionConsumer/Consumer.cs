@@ -42,11 +42,11 @@ namespace AsyncSessionConsumer
             sessionProcessor.SessionClosingAsync += SessionProcessor_SessionClosingAsync;
             sessionProcessor.ProcessErrorAsync += SessionProcessor_ProcessErrorAsync;
 
-            _cancellationTokenSource = new CancellationTokenSource();
             await sessionProcessor.StartProcessingAsync();
 
             try
             {
+                _cancellationTokenSource = new CancellationTokenSource();
                 await Task.Delay(Timeout.InfiniteTimeSpan, _cancellationTokenSource.Token);
             }
             catch (TaskCanceledException)
