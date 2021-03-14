@@ -30,7 +30,7 @@ namespace SessionConsumer
             while (true)
             {
                 await using ServiceBusSessionReceiver receiver = await client.AcceptNextSessionAsync(EnvironmentVariable.SessionQueue);
-                ConsoleHelper.WriteInfo($"{consumerName} locked to session {receiver.SessionId}");
+                ConsoleHelper.WriteInfo($"{consumerName}: Locked to session {receiver.SessionId}");
 
                 ServiceBusReceivedMessage message;
                 while ((message = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(2))) != null)
@@ -43,7 +43,7 @@ namespace SessionConsumer
 
                         if (sessionState.IsStateComplete("A"))
                         {
-                            ConsoleHelper.WriteInfo("State A already complete!");
+                            ConsoleHelper.WriteInfo($"{consumerName}: State A already complete!");
                         }
                         else
                         {
@@ -58,13 +58,15 @@ namespace SessionConsumer
                         // Execute work B.
                         DoWork();
 
+
                         // Message handled!
+                        await receiver.SetSessionStateAsync(null);
                         _messageHandlingStatistics.ValidateOrder(message.SessionId, message.SequenceNumber);
                         await receiver.CompleteMessageAsync(message);
                     }
                     catch (Exception ex)
                     {
-                        ConsoleHelper.WriteError(ex.Message);
+                        ConsoleHelper.WriteError($"{consumerName}: {ex.Message}");
                         await receiver.AbandonMessageAsync(message);
                     }
                 }
